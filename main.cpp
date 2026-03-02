@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <cstdint>
+#include <iomanip>
 
 using namespace std;
 
@@ -10,6 +11,12 @@ struct Frame {
     int page = -1;
     uint32_t age = 0;
     bool ref = false;
+};
+
+struct Result {
+    long long faults = 0;
+    long long refs = 0;
+    double per1000 = 0.0;
 };
 
 static void printUsage(const char* prog) {
@@ -45,7 +52,6 @@ static void doTick(vector<Frame>& frames, uint32_t msbMask) {
         if(frames[i].page == -1) continue;
 
         frames[i].age >>= 1;
-
         if(frames[i].ref) frames[i].age |= msbMask;
 
         frames[i].ref = false;
@@ -74,35 +80,40 @@ static int pickVictim(const vector<Frame>& frames) {
     return best;
 }
 
-static long long simulateOne(const vector<int>& trace, int frameCount, int tickEvery, uint32_t msbMask) {
+static double calcPer1000(long long faults, long long refs) {
+    if(refs == 0) return 0.0;
+    return (double)faults * 1000.0 / (double)refs;
+}
+
+static Result simulateOne(const vector<int>& trace, int frameCount, int tickEvery, uint32_t msbMask) {
     vector<Frame> frames(frameCount);
 
-    long long faults = 0;
-    long long refs = 0;
+    Result r;
 
     for(int p : trace) {
-        refs++;
+        r.refs++;
 
         int hit = findPage(frames, p);
         if(hit != -1) {
             frames[hit].ref = true;
         } else {
-            faults++;
+            r.faults++;
 
             int slot = findEmpty(frames);
             if(slot == -1) slot = pickVictim(frames);
 
             frames[slot].page = p;
-            frames[slot].age = 0;     // will get msb on next tick
+            frames[slot].age = 0;
             frames[slot].ref = true;
         }
 
-        if(tickEvery > 0 && (refs % tickEvery == 0)) {
+        if(tickEvery > 0 && (r.refs % tickEvery == 0)) {
             doTick(frames, msbMask);
         }
     }
 
-    return faults;
+    r.per1000 = calcPer1000(r.faults, r.refs);
+    return r;
 }
 
 int main(int argc , char* argv[]) {
@@ -142,12 +153,13 @@ int main(int argc , char* argv[]) {
 
     uint32_t msbMask = makeMsbMask(bits);
 
-    // for now just run one simulation as a check (using maxFrames)
-    long long faults = simulateOne(trace, maxFrames, tickEvery, msbMask);
+    // still just a check run using maxFrames
+    Result r = simulateOne(trace, maxFrames, tickEvery, msbMask);
 
-    cout << "trace refs: " << trace.size() << "\n";
+    cout << "trace refs: " << r.refs << "\n";
     cout << "frames used (temp): " << maxFrames << "\n";
-    cout << "faults: " << faults << "\n";
+    cout << "faults: " << r.faults << "\n";
+    cout << "faults per 1000: " << fixed << setprecision(2) << r.per1000 << "\n";
     cout << "csv output will be: " << outCsv << " (not written yet)\n";
 
     return 0;
