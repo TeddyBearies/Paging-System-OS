@@ -52,6 +52,59 @@ static void doTick(vector<Frame>& frames, uint32_t msbMask) {
     }
 }
 
+static int findPage(const vector<Frame>& frames, int pageNum) {
+    for(int i = 0; i < (int)frames.size(); i++) {
+        if(frames[i].page == pageNum) return i;
+    }
+    return -1;
+}
+
+static int findEmpty(const vector<Frame>& frames) {
+    for(int i = 0; i < (int)frames.size(); i++) {
+        if(frames[i].page == -1) return i;
+    }
+    return -1;
+}
+
+static int pickVictim(const vector<Frame>& frames) {
+    int best = 0;
+    for(int i = 1; i < (int)frames.size(); i++) {
+        if(frames[i].age < frames[best].age) best = i;
+    }
+    return best;
+}
+
+static long long simulateOne(const vector<int>& trace, int frameCount, int tickEvery, uint32_t msbMask) {
+    vector<Frame> frames(frameCount);
+
+    long long faults = 0;
+    long long refs = 0;
+
+    for(int p : trace) {
+        refs++;
+
+        int hit = findPage(frames, p);
+        if(hit != -1) {
+            frames[hit].ref = true;
+        } else {
+            faults++;
+
+            int slot = findEmpty(frames);
+            if(slot == -1) slot = pickVictim(frames);
+
+            frames[slot].page = p;
+            frames[slot].age = 0;     // will get msb on next tick
+            frames[slot].ref = true;
+        }
+
+        if(tickEvery > 0 && (refs % tickEvery == 0)) {
+            doTick(frames, msbMask);
+        }
+    }
+
+    return faults;
+}
+
 int main(int argc , char* argv[]) {
     cout << "paging aging simulator (task 3)\n";
 
@@ -89,16 +142,13 @@ int main(int argc , char* argv[]) {
 
     uint32_t msbMask = makeMsbMask(bits);
 
-    cout << "trace: " << tracePath << "  refs=" << trace.size() << "\n";
-    cout << "maxFrames=" << maxFrames << " tickEvery=" << tickEvery << " bits=" << bits << "\n";
-    cout << "msbMask=" << msbMask << "\n";
-    cout << "csv output will be: " << outCsv << "\n";
+    // for now just run one simulation as a check (using maxFrames)
+    long long faults = simulateOne(trace, maxFrames, tickEvery, msbMask);
 
-    // just a tiny sanity check: tick a fake frame once
-    vector<Frame> tmp(1);
-    tmp[0].page = 99;
-    tmp[0].ref = true;
-    doTick(tmp, msbMask);
+    cout << "trace refs: " << trace.size() << "\n";
+    cout << "frames used (temp): " << maxFrames << "\n";
+    cout << "faults: " << faults << "\n";
+    cout << "csv output will be: " << outCsv << " (not written yet)\n";
 
     return 0;
 }
