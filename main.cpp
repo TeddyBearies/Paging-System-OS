@@ -2,8 +2,15 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <cstdint>
 
 using namespace std;
+
+struct Frame {
+    int page = -1;
+    uint32_t age = 0;
+    bool ref = false;
+};
 
 static void printUsage(const char* prog) {
     cout << "usage:\n";
@@ -25,6 +32,24 @@ static vector<int> readTraceFile(const string& path) {
     while(in >> x) trace.push_back(x);
 
     return trace;
+}
+
+static uint32_t makeMsbMask(int bits) {
+    if(bits <= 0) return 0;
+    if(bits >= 32) return (1u << 31);
+    return (1u << (bits - 1));
+}
+
+static void doTick(vector<Frame>& frames, uint32_t msbMask) {
+    for(int i = 0; i < (int)frames.size(); i++) {
+        if(frames[i].page == -1) continue;
+
+        frames[i].age >>= 1;
+
+        if(frames[i].ref) frames[i].age |= msbMask;
+
+        frames[i].ref = false;
+    }
 }
 
 int main(int argc , char* argv[]) {
@@ -62,9 +87,18 @@ int main(int argc , char* argv[]) {
         return 0;
     }
 
+    uint32_t msbMask = makeMsbMask(bits);
+
     cout << "trace: " << tracePath << "  refs=" << trace.size() << "\n";
     cout << "maxFrames=" << maxFrames << " tickEvery=" << tickEvery << " bits=" << bits << "\n";
+    cout << "msbMask=" << msbMask << "\n";
     cout << "csv output will be: " << outCsv << "\n";
+
+    // just a tiny sanity check: tick a fake frame once
+    vector<Frame> tmp(1);
+    tmp[0].page = 99;
+    tmp[0].ref = true;
+    doTick(tmp, msbMask);
 
     return 0;
 }
