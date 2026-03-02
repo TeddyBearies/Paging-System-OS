@@ -116,6 +116,30 @@ static Result simulateOne(const vector<int>& trace, int frameCount, int tickEver
     return r;
 }
 
+static bool writeCsvAllFrames(const string& outCsv,
+                             const vector<int>& trace,
+                             int maxFrames,
+                             int tickEvery,
+                             uint32_t msbMask) {
+
+    ofstream out(outCsv);
+    if(!out.is_open()) {
+        cerr << "cant write csv: " << outCsv << "\n";
+        return false;
+    }
+
+    out << "frames,faults,refs,faults_per_1000\n";
+
+    for(int f = 1; f <= maxFrames; f++) {
+        Result r = simulateOne(trace, f, tickEvery, msbMask);
+
+        out << f << "," << r.faults << "," << r.refs << ",";
+        out << fixed << setprecision(3) << r.per1000 << "\n";
+    }
+
+    return true;
+}
+
 int main(int argc , char* argv[]) {
     cout << "paging aging simulator (task 3)\n";
 
@@ -153,14 +177,11 @@ int main(int argc , char* argv[]) {
 
     uint32_t msbMask = makeMsbMask(bits);
 
-    // still just a check run using maxFrames
-    Result r = simulateOne(trace, maxFrames, tickEvery, msbMask);
+    cout << "trace refs: " << trace.size() << "\n";
+    cout << "running frames 1.." << maxFrames << "\n";
 
-    cout << "trace refs: " << r.refs << "\n";
-    cout << "frames used (temp): " << maxFrames << "\n";
-    cout << "faults: " << r.faults << "\n";
-    cout << "faults per 1000: " << fixed << setprecision(2) << r.per1000 << "\n";
-    cout << "csv output will be: " << outCsv << " (not written yet)\n";
+    bool ok = writeCsvAllFrames(outCsv, trace, maxFrames, tickEvery, msbMask);
+    if(ok) cout << "wrote csv: " << outCsv << "\n";
 
     return 0;
 }
